@@ -1,0 +1,711 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>石川紙業 配車管理システム</title>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #f4f5f7;
+    --surface: #ffffff;
+    --border: #e2e4e9;
+    --text-primary: #1a1d23;
+    --text-secondary: #6b7280;
+    --text-hint: #9ca3af;
+    --blue: #1e5fa8;
+    --blue-light: #e8f0fb;
+    --blue-mid: #4a8ad4;
+    --amber: #b45309;
+    --amber-light: #fef3c7;
+    --green: #166534;
+    --green-light: #dcfce7;
+    --gray-light: #f3f4f6;
+    --red: #991b1b;
+    --red-light: #fee2e2;
+    --purple: #5b21b6;
+    --purple-light: #ede9fe;
+    --radius-sm: 6px;
+    --radius-md: 10px;
+    --radius-lg: 14px;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: 'Noto Sans JP', sans-serif;
+    background: var(--bg);
+    color: var(--text-primary);
+    font-size: 14px;
+    min-height: 100vh;
+  }
+
+  /* ===== HEADER ===== */
+  .header {
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    padding: 0 24px;
+    height: 56px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+  }
+  .header-left { display: flex; align-items: center; gap: 12px; }
+  .logo { width: 32px; height: 32px; background: var(--blue); border-radius: var(--radius-sm); display: flex; align-items: center; justify-content: center; }
+  .logo svg { width: 18px; height: 18px; fill: white; }
+  .header h1 { font-size: 15px; font-weight: 700; color: var(--text-primary); }
+  .header-right { display: flex; align-items: center; gap: 10px; }
+  .date-pill { font-size: 12px; color: var(--text-secondary); background: var(--gray-light); padding: 5px 12px; border-radius: 20px; }
+  .loading-indicator { font-size: 12px; color: var(--text-hint); display: none; }
+  .loading-indicator.show { display: block; }
+
+  /* ===== MAIN LAYOUT ===== */
+  .main { display: grid; grid-template-columns: 1fr 360px; gap: 16px; padding: 16px 24px; min-height: calc(100vh - 56px); }
+
+  /* ===== LEFT COLUMN ===== */
+  .left-col { display: flex; flex-direction: column; gap: 16px; }
+
+  /* ===== METRICS ===== */
+  .metrics { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+  .metric {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    padding: 14px 16px;
+  }
+  .metric-label { font-size: 11px; color: var(--text-secondary); margin-bottom: 6px; letter-spacing: 0.02em; }
+  .metric-value { font-size: 26px; font-weight: 700; }
+  .metric-value.blue { color: var(--blue); }
+  .metric-value.amber { color: var(--amber); }
+  .metric-value.green { color: var(--green); }
+  .metric-value.gray { color: var(--text-secondary); }
+
+  /* ===== TABLE CARD ===== */
+  .table-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+    flex: 1;
+  }
+  .card-header {
+    padding: 14px 18px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+  }
+  .card-title { font-size: 14px; font-weight: 700; }
+  .tabs { display: flex; gap: 4px; background: var(--gray-light); padding: 3px; border-radius: var(--radius-sm); }
+  .tab {
+    font-size: 12px;
+    padding: 4px 12px;
+    border-radius: 4px;
+    cursor: pointer;
+    color: var(--text-secondary);
+    border: none;
+    background: transparent;
+    font-family: inherit;
+    transition: all 0.15s;
+  }
+  .tab.active { background: var(--surface); color: var(--text-primary); font-weight: 500; box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
+
+  .table-wrap { overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th {
+    padding: 10px 14px;
+    text-align: left;
+    color: var(--text-secondary);
+    font-weight: 500;
+    font-size: 11px;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    border-bottom: 1px solid var(--border);
+    background: var(--gray-light);
+    white-space: nowrap;
+  }
+  td {
+    padding: 11px 14px;
+    border-bottom: 1px solid var(--border);
+    color: var(--text-primary);
+    white-space: nowrap;
+  }
+  tr:last-child td { border-bottom: none; }
+  tr:hover td { background: #f9fafb; }
+  .empty-row td { text-align: center; color: var(--text-hint); padding: 32px; }
+
+  /* ===== STATUS BADGES ===== */
+  .badge {
+    display: inline-flex;
+    align-items: center;
+    font-size: 11px;
+    font-weight: 500;
+    padding: 3px 9px;
+    border-radius: 20px;
+    white-space: nowrap;
+  }
+  .badge-haisha { background: var(--blue-light); color: var(--blue); }
+  .badge-junjo { background: var(--amber-light); color: var(--amber); }
+  .badge-haisoshu { background: var(--purple-light); color: var(--purple); }
+  .badge-kanryo { background: var(--green-light); color: var(--green); }
+  .badge-yoyaku { background: var(--gray-light); color: var(--text-secondary); }
+  .badge-mochikoshi { background: var(--red-light); color: var(--red); }
+
+  /* ===== BUTTONS ===== */
+  .btn {
+    font-size: 12px;
+    padding: 5px 12px;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--border);
+    background: var(--surface);
+    color: var(--text-primary);
+    cursor: pointer;
+    font-family: inherit;
+    font-weight: 500;
+    transition: all 0.15s;
+  }
+  .btn:hover { background: var(--gray-light); }
+  .btn-confirm { border-color: var(--blue); color: var(--blue); }
+  .btn-confirm:hover { background: var(--blue-light); }
+  .btn-new {
+    font-size: 13px;
+    padding: 7px 16px;
+    border-radius: var(--radius-sm);
+    border: none;
+    background: var(--blue);
+    color: white;
+    cursor: pointer;
+    font-family: inherit;
+    font-weight: 500;
+    transition: all 0.15s;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .btn-new:hover { background: #1a4f8a; }
+
+  /* ===== RIGHT COLUMN ===== */
+  .right-col { display: flex; flex-direction: column; gap: 16px; }
+
+  /* ===== MAP CARD ===== */
+  .map-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+  }
+  .map-frame {
+    width: 100%;
+    height: 280px;
+    border: none;
+    display: block;
+    background: #e8eef7;
+  }
+  .map-placeholder {
+    width: 100%;
+    height: 280px;
+    background: linear-gradient(135deg, #e8eef7 0%, #d4e1f5 100%);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+  }
+  .map-icon { font-size: 32px; opacity: 0.5; }
+  .map-note { font-size: 12px; color: var(--text-hint); }
+
+  /* ===== STOP LIST ===== */
+  .stop-list { padding: 0 16px 12px; }
+  .stop-list-header { padding: 12px 0 8px; font-size: 11px; font-weight: 700; color: var(--text-secondary); letter-spacing: 0.05em; text-transform: uppercase; border-bottom: 1px solid var(--border); margin-bottom: 4px; }
+  .stop-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 10px 0;
+    border-bottom: 1px solid var(--border);
+  }
+  .stop-item:last-child { border-bottom: none; }
+  .stop-num {
+    width: 22px; height: 22px;
+    border-radius: 50%;
+    background: var(--blue);
+    color: white;
+    font-size: 11px;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    margin-top: 1px;
+  }
+  .stop-info { flex: 1; min-width: 0; }
+  .stop-name { font-size: 13px; font-weight: 500; color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .stop-meta { font-size: 11px; color: var(--text-secondary); margin-top: 2px; }
+
+  /* ===== MODAL ===== */
+  .modal-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.4);
+    z-index: 200;
+    align-items: center;
+    justify-content: center;
+  }
+  .modal-overlay.show { display: flex; }
+  .modal {
+    background: var(--surface);
+    border-radius: var(--radius-lg);
+    width: 480px;
+    max-width: 95vw;
+    max-height: 90vh;
+    overflow-y: auto;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.15);
+  }
+  .modal-header {
+    padding: 18px 20px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .modal-title { font-size: 15px; font-weight: 700; }
+  .modal-close { background: none; border: none; font-size: 20px; cursor: pointer; color: var(--text-secondary); line-height: 1; }
+  .modal-body { padding: 20px; display: flex; flex-direction: column; gap: 14px; }
+  .form-group { display: flex; flex-direction: column; gap: 5px; }
+  .form-label { font-size: 12px; font-weight: 500; color: var(--text-secondary); }
+  .form-input, .form-select {
+    padding: 9px 12px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    font-family: inherit;
+    font-size: 13px;
+    color: var(--text-primary);
+    background: var(--surface);
+    outline: none;
+    transition: border-color 0.15s;
+  }
+  .form-input:focus, .form-select:focus { border-color: var(--blue-mid); }
+  .modal-footer {
+    padding: 14px 20px;
+    border-top: 1px solid var(--border);
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+  }
+  .btn-cancel { font-size: 13px; padding: 8px 16px; border-radius: var(--radius-sm); border: 1px solid var(--border); background: var(--surface); color: var(--text-secondary); cursor: pointer; font-family: inherit; }
+  .btn-save { font-size: 13px; padding: 8px 16px; border-radius: var(--radius-sm); border: none; background: var(--blue); color: white; cursor: pointer; font-family: inherit; font-weight: 500; }
+  .btn-save:hover { background: #1a4f8a; }
+
+  /* ===== TOAST ===== */
+  .toast {
+    position: fixed;
+    bottom: 24px;
+    right: 24px;
+    background: var(--text-primary);
+    color: white;
+    font-size: 13px;
+    padding: 10px 18px;
+    border-radius: var(--radius-md);
+    z-index: 300;
+    display: none;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.2);
+  }
+  .toast.show { display: block; }
+  .toast.success { background: var(--green); }
+  .toast.error { background: var(--red); }
+</style>
+</head>
+<body>
+
+<!-- HEADER -->
+<header class="header">
+  <div class="header-left">
+    <div class="logo">
+      <svg viewBox="0 0 24 24"><path d="M20 8h-3V4H3c-1.1 0-2 .9-2 2v11h2c0 1.66 1.34 3 3 3s3-1.34 3-3h6c0 1.66 1.34 3 3 3s3-1.34 3-3h2v-5l-3-4zM6 18.5c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5zm13.5-9l1.96 2.5H17V9.5h2.5zm-1.5 9c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5z"/></svg>
+    </div>
+    <h1>石川紙業 配車管理</h1>
+  </div>
+  <div class="header-right">
+    <span class="loading-indicator" id="loadingIndicator">読み込み中...</span>
+    <span class="date-pill" id="datePill"></span>
+    <button class="btn-new" onclick="openModal()">
+      <span>＋</span> 新規配送登録
+    </button>
+  </div>
+</header>
+
+<!-- MAIN -->
+<div class="main">
+  <!-- LEFT -->
+  <div class="left-col">
+    <!-- METRICS -->
+    <div class="metrics">
+      <div class="metric">
+        <div class="metric-label">本日の配送件数</div>
+        <div class="metric-value blue" id="metricTotal">—</div>
+      </div>
+      <div class="metric">
+        <div class="metric-label">配車組み中</div>
+        <div class="metric-value amber" id="metricHaisha">—</div>
+      </div>
+      <div class="metric">
+        <div class="metric-label">配送中</div>
+        <div class="metric-value gray" id="metricHaisoshu">—</div>
+      </div>
+      <div class="metric">
+        <div class="metric-label">完了</div>
+        <div class="metric-value green" id="metricKanryo">—</div>
+      </div>
+    </div>
+
+    <!-- TABLE -->
+    <div class="table-card">
+      <div class="card-header">
+        <span class="card-title">配送一覧</span>
+        <div style="display:flex;align-items:center;gap:10px;">
+          <div class="tabs">
+            <button class="tab active" id="tabToday" onclick="switchTab('today')">本日</button>
+            <button class="tab" id="tabTomorrow" onclick="switchTab('tomorrow')">明日</button>
+          </div>
+        </div>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>配送先</th>
+              <th>ドライバー</th>
+              <th>作業区分</th>
+              <th>配送順</th>
+              <th>ステータス</th>
+              <th>操作</th>
+            </tr>
+          </thead>
+          <tbody id="tableBody">
+            <tr class="empty-row"><td colspan="6">読み込み中...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- RIGHT -->
+  <div class="right-col">
+    <!-- MAP -->
+    <div class="map-card">
+      <div class="card-header">
+        <span class="card-title">本日の配送マップ</span>
+      </div>
+      <div class="map-placeholder">
+        <div class="map-icon">🗺️</div>
+        <div class="map-note">住所データを読み込み中...</div>
+      </div>
+    </div>
+
+    <!-- STOP LIST -->
+    <div class="table-card">
+      <div class="card-header">
+        <span class="card-title">配送先リスト</span>
+      </div>
+      <div class="stop-list">
+        <div id="stopList"><p style="color:var(--text-hint);font-size:12px;padding:12px 0;">データを読み込み中...</p></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL -->
+<div class="modal-overlay" id="modalOverlay">
+  <div class="modal">
+    <div class="modal-header">
+      <span class="modal-title">新規配送登録</span>
+      <button class="modal-close" onclick="closeModal()">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label class="form-label">配送予定日</label>
+        <input type="date" class="form-input" id="formDate">
+      </div>
+      <div class="form-group">
+        <label class="form-label">配送先（Customer）</label>
+        <select class="form-select" id="formCustomer">
+          <option value="">選択してください</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">作業区分</label>
+        <select class="form-select" id="formSagyo">
+          <option value="">選択してください</option>
+          <option value="積み込み">積み込み</option>
+          <option value="納品">納品</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">ドライバー名</label>
+        <input type="text" class="form-input" id="formDriver" placeholder="例：田中太郎">
+      </div>
+      <div class="form-group">
+        <label class="form-label">配送順</label>
+        <input type="number" class="form-input" id="formOrder" placeholder="例：1">
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-cancel" onclick="closeModal()">キャンセル</button>
+      <button class="btn-save" onclick="saveRecord()">登録する</button>
+    </div>
+  </div>
+</div>
+
+<!-- TOAST -->
+<div class="toast" id="toast"></div>
+
+<script>
+  // ===== CONFIG =====
+  const TOKEN = 'YOUR_TOKEN_HERE';
+  const BASE_ID = 'appd1NLpWInfaP7ff';
+  const TABLE = 'Stop';
+  const CUSTOMER_TABLE = 'Customer';
+  const API = 'https://api.airtable.com/v0';
+
+  let currentTab = 'today';
+  let allRecords = [];
+
+  // ===== DATE UTILS =====
+  function getDateStr(offset = 0) {
+    const d = new Date();
+    d.setDate(d.getDate() + offset);
+    return d.toISOString().split('T')[0];
+  }
+
+  function formatDate(str) {
+    if (!str) return '—';
+    const d = new Date(str);
+    return `${d.getMonth()+1}/${d.getDate()}`;
+  }
+
+  function todayJP() {
+    const d = new Date();
+    const days = ['日','月','火','水','木','金','土'];
+    return `${d.getFullYear()}年${d.getMonth()+1}月${d.getDate()}日（${days[d.getDay()]}）`;
+  }
+
+  // ===== API =====
+  async function fetchRecords() {
+    setLoading(true);
+    try {
+      const today = getDateStr(0);
+      const tomorrow = getDateStr(1);
+      const filter = `OR(IS_SAME({配送予定日},'${today}','day'),IS_SAME({配送予定日},'${tomorrow}','day'))`;
+      const url = `${API}/${BASE_ID}/${TABLE}?filterByFormula=${encodeURIComponent(filter)}&sort[0][field]=配送順&sort[0][direction]=asc`;
+      const res = await fetch(url, { headers: { Authorization: `Bearer ${TOKEN}` } });
+      if (!res.ok) throw new Error('APIエラー: ' + res.status);
+      const data = await res.json();
+      allRecords = data.records || [];
+      renderAll();
+    } catch(e) {
+      showToast('データの読み込みに失敗しました: ' + e.message, 'error');
+      document.getElementById('tableBody').innerHTML = '<tr class="empty-row"><td colspan="6">読み込みに失敗しました</td></tr>';
+    }
+    setLoading(false);
+  }
+
+  async function fetchCustomers() {
+    try {
+      const url = `${API}/${BASE_ID}/${CUSTOMER_TABLE}`;
+      const res = await fetch(url, { headers: { Authorization: `Bearer ${TOKEN}` } });
+      const data = await res.json();
+      const select = document.getElementById('formCustomer');
+      (data.records || []).forEach(r => {
+        const opt = document.createElement('option');
+        opt.value = r.id;
+        opt.textContent = r.fields['企業名'] || r.id;
+        select.appendChild(opt);
+      });
+    } catch(e) {}
+  }
+
+  async function updateStatus(recordId, newStatus) {
+    try {
+      const url = `${API}/${BASE_ID}/${TABLE}/${recordId}`;
+      const res = await fetch(url, {
+        method: 'PATCH',
+        headers: { Authorization: `Bearer ${TOKEN}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fields: { 'ステータス': newStatus } })
+      });
+      if (!res.ok) throw new Error('更新失敗');
+      showToast('ステータスを更新しました', 'success');
+      await fetchRecords();
+    } catch(e) {
+      showToast('更新に失敗しました', 'error');
+    }
+  }
+
+  async function saveRecord() {
+    const date = document.getElementById('formDate').value;
+    const customer = document.getElementById('formCustomer').value;
+    const sagyo = document.getElementById('formSagyo').value;
+    const driver = document.getElementById('formDriver').value;
+    const order = document.getElementById('formOrder').value;
+
+    if (!date || !customer) {
+      showToast('配送予定日と配送先は必須です', 'error');
+      return;
+    }
+
+    try {
+      const url = `${API}/${BASE_ID}/${TABLE}`;
+      const fields = {
+        '配送予定日': date,
+        'ステータス': '予約',
+        '作業区分': sagyo || undefined,
+        'ドライバー名': driver || undefined,
+        '配送順': order ? parseInt(order) : undefined,
+        'Customer': [customer]
+      };
+      Object.keys(fields).forEach(k => fields[k] === undefined && delete fields[k]);
+
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${TOKEN}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fields })
+      });
+      if (!res.ok) throw new Error('登録失敗');
+      showToast('新規配送を登録しました', 'success');
+      closeModal();
+      await fetchRecords();
+    } catch(e) {
+      showToast('登録に失敗しました', 'error');
+    }
+  }
+
+  // ===== RENDER =====
+  function renderAll() {
+    const targetDate = currentTab === 'today' ? getDateStr(0) : getDateStr(1);
+    const filtered = allRecords.filter(r => {
+      const d = (r.fields['配送予定日'] || '').split('T')[0];
+      return d === targetDate;
+    });
+    renderTable(filtered);
+    renderMetrics();
+    renderStops(filtered);
+  }
+
+  function renderTable(records) {
+    const tbody = document.getElementById('tableBody');
+    if (!records.length) {
+      tbody.innerHTML = '<tr class="empty-row"><td colspan="6">配送データがありません</td></tr>';
+      return;
+    }
+    tbody.innerHTML = records.map(r => {
+      const f = r.fields;
+      const status = f['ステータス'] || '—';
+      const badgeClass = getBadgeClass(status);
+      const canConfirm = status === '配車組み中';
+      return `
+        <tr>
+          <td>${f['配送先名 (from Customer)'] || f['Customer'] || '—'}</td>
+          <td>${f['ドライバー名'] || '—'}</td>
+          <td>${f['作業区分'] || '—'}</td>
+          <td>${f['配送順'] || '—'}</td>
+          <td><span class="badge ${badgeClass}">${status}</span></td>
+          <td>
+            ${canConfirm
+              ? `<button class="btn btn-confirm" onclick="updateStatus('${r.id}','順序確定済み')">配車確定</button>`
+              : `<span style="color:var(--text-hint);font-size:12px;">—</span>`
+            }
+          </td>
+        </tr>
+      `;
+    }).join('');
+  }
+
+  function renderMetrics() {
+    const today = getDateStr(0);
+    const todayRecs = allRecords.filter(r => (r.fields['配送予定日'] || '').split('T')[0] === today);
+    document.getElementById('metricTotal').textContent = todayRecs.length;
+    document.getElementById('metricHaisha').textContent = todayRecs.filter(r => r.fields['ステータス'] === '配車組み中').length;
+    document.getElementById('metricHaisoshu').textContent = todayRecs.filter(r => r.fields['ステータス'] === '配送中').length;
+    document.getElementById('metricKanryo').textContent = todayRecs.filter(r => r.fields['ステータス'] === '完了').length;
+  }
+
+  function renderStops(records) {
+    const stopList = document.getElementById('stopList');
+    if (!records.length) {
+      stopList.innerHTML = '<p style="color:var(--text-hint);font-size:12px;padding:12px 0;">配送先がありません</p>';
+      return;
+    }
+    const sorted = [...records].sort((a,b) => (a.fields['配送順']||99) - (b.fields['配送順']||99));
+    stopList.innerHTML = sorted.map((r, i) => {
+      const f = r.fields;
+      const name = f['配送先名 (from Customer)'] || f['Customer'] || '—';
+      const addr = f['配送先住所 (from Customer)'] || f['住所'] || '';
+      const status = f['ステータス'] || '—';
+      return `
+        <div class="stop-item">
+          <div class="stop-num">${i+1}</div>
+          <div class="stop-info">
+            <div class="stop-name">${name}</div>
+            <div class="stop-meta">${addr || status}</div>
+          </div>
+          <span class="badge ${getBadgeClass(status)}" style="font-size:10px;">${status}</span>
+        </div>
+      `;
+    }).join('');
+  }
+
+  function getBadgeClass(status) {
+    const map = {
+      '配車組み中': 'badge-haisha',
+      '順序確定済み': 'badge-junjo',
+      '配送中': 'badge-haisoshu',
+      '完了': 'badge-kanryo',
+      '予約': 'badge-yoyaku',
+      '持ち越し': 'badge-mochikoshi',
+    };
+    return map[status] || 'badge-yoyaku';
+  }
+
+  // ===== TAB =====
+  function switchTab(tab) {
+    currentTab = tab;
+    document.getElementById('tabToday').classList.toggle('active', tab === 'today');
+    document.getElementById('tabTomorrow').classList.toggle('active', tab === 'tomorrow');
+    renderAll();
+  }
+
+  // ===== MODAL =====
+  function openModal() {
+    document.getElementById('formDate').value = getDateStr(0);
+    document.getElementById('modalOverlay').classList.add('show');
+  }
+  function closeModal() {
+    document.getElementById('modalOverlay').classList.remove('show');
+  }
+
+  // ===== UI HELPERS =====
+  function setLoading(val) {
+    document.getElementById('loadingIndicator').classList.toggle('show', val);
+  }
+
+  function showToast(msg, type = '') {
+    const t = document.getElementById('toast');
+    t.textContent = msg;
+    t.className = 'toast show' + (type ? ' ' + type : '');
+    setTimeout(() => t.classList.remove('show'), 3000);
+  }
+
+  // ===== INIT =====
+  document.getElementById('datePill').textContent = todayJP();
+  fetchRecords();
+  fetchCustomers();
+
+  // 3分ごとに自動更新
+  setInterval(fetchRecords, 3 * 60 * 1000);
+</script>
+</body>
+</html>
