@@ -500,7 +500,7 @@
     try {
       const today = getDateStr(0);
       const tomorrow = getDateStr(1);
-      const filter = `OR(IS_SAME({配送予定日},'${today}','day'),IS_SAME({配送予定日},'${tomorrow}','day'))`;
+      const filter = `OR({配送予定日}='${today}',{配送予定日}='${tomorrow}')`;
       const url = `${API}/${BASE_ID}/${TABLE}?filterByFormula=${encodeURIComponent(filter)}&sort[0][field]=配送順&sort[0][direction]=asc`;
       const res = await fetch(url, { headers: { Authorization: `Bearer ${TOKEN}` } });
       if (!res.ok) throw new Error('APIエラー: ' + res.status);
