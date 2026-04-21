@@ -381,7 +381,7 @@
               <th>配送先</th>
               <th>ドライバー</th>
               <th>作業区分</th>
-              <th>配送順序</th>
+              <th>配送順</th>
               <th>ステータス</th>
               <th>操作</th>
             </tr>
@@ -450,7 +450,7 @@
         <input type="text" class="form-input" id="formDriver" placeholder="例：田中太郎">
       </div>
       <div class="form-group">
-        <label class="form-label">配送順序</label>
+        <label class="form-label">配送順</label>
         <input type="number" class="form-input" id="formOrder" placeholder="例：1">
       </div>
     </div>
@@ -500,8 +500,8 @@
     try {
       const today = getDateStr(0);
       const tomorrow = getDateStr(1);
-      const filter = `OR(DATETIME_FORMAT({配送予定日},'YYYY-MM-DD')='${today}',DATETIME_FORMAT({配送予定日},'YYYY-MM-DD')='${tomorrow}')`;
-      const url = `${API}/${BASE_ID}/${TABLE}?filterByFormula=${encodeURIComponent(filter)}&sort[0][field]=配送順序&sort[0][direction]=asc`;
+      const filter = `OR(IS_SAME({配送予定日},'${today}','day'),IS_SAME({配送予定日},'${tomorrow}','day'))`;
+      const url = `${API}/${BASE_ID}/${TABLE}?filterByFormula=${encodeURIComponent(filter)}&sort[0][field]=配送順&sort[0][direction]=asc`;
       const res = await fetch(url, { headers: { Authorization: `Bearer ${TOKEN}` } });
       if (!res.ok) throw new Error('APIエラー: ' + res.status);
       const data = await res.json();
@@ -564,7 +564,7 @@
         'ステータス': '予約',
         '作業区分': sagyo || undefined,
         'ドライバー名': driver || undefined,
-        '配送順序': order ? parseInt(order) : undefined,
+        '配送順': order ? parseInt(order) : undefined,
         'Customer': [customer]
       };
       Object.keys(fields).forEach(k => fields[k] === undefined && delete fields[k]);
@@ -611,7 +611,7 @@
           <td>${f['配送先名 (from Customer)'] || f['Customer'] || '—'}</td>
           <td>${f['ドライバー名'] || '—'}</td>
           <td>${f['作業区分'] || '—'}</td>
-          <td>${f['配送順序'] || '—'}</td>
+          <td>${f['配送順'] || '—'}</td>
           <td><span class="badge ${badgeClass}">${status}</span></td>
           <td>
             ${canConfirm
@@ -639,7 +639,7 @@
       stopList.innerHTML = '<p style="color:var(--text-hint);font-size:12px;padding:12px 0;">配送先がありません</p>';
       return;
     }
-    const sorted = [...records].sort((a,b) => (a.fields['配送順序']||99) - (b.fields['配送順序']||99));
+    const sorted = [...records].sort((a,b) => (a.fields['配送順']||99) - (b.fields['配送順']||99));
     stopList.innerHTML = sorted.map((r, i) => {
       const f = r.fields;
       const name = f['配送先名 (from Customer)'] || f['Customer'] || '—';
