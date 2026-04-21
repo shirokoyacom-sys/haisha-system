@@ -378,10 +378,11 @@
         <table>
           <thead>
             <tr>
+              <th style="width:30px;"></th>
               <th>配送先</th>
               <th>ドライバー</th>
               <th>作業区分</th>
-              <th>配送順</th>
+              <th>配送順序</th>
               <th>ステータス</th>
               <th>操作</th>
             </tr>
@@ -447,7 +448,9 @@
       </div>
       <div class="form-group">
         <label class="form-label">ドライバー名</label>
-        <input type="text" class="form-input" id="formDriver" placeholder="例：田中太郎">
+        <select class="form-select" id="formDriver">
+          <option value="">選択してください</option>
+        </select>
       </div>
       <div class="form-group">
         <label class="form-label">配送順序</label>
@@ -484,11 +487,24 @@
       </div>
       <div class="form-group">
         <label class="form-label">数量</label>
-        <input type="number" class="form-input" id="formQty" placeholder="例：100">
+        <div style="display:flex;gap:8px;">
+          <input type="number" class="form-input" id="formQty" placeholder="例：100" style="flex:1;">
+          <select class="form-select" id="formUnit" style="width:90px;">
+            <option value="kg">kg</option>
+            <option value="枚">枚</option>
+            <option value="個">個</option>
+            <option value="本">本</option>
+            <option value="ケース">ケース</option>
+          </select>
+        </div>
       </div>
       <div class="form-group">
         <label class="form-label">パレット数</label>
         <input type="number" class="form-input" id="formPallet" placeholder="例：2">
+      </div>
+      <div class="form-group">
+        <label class="form-label">パレットサイズ</label>
+        <input type="text" class="form-input" id="formPalletSize" placeholder="例：1100×1100">
       </div>
       <div class="form-group">
         <label class="form-label">備考</label>
@@ -513,8 +529,11 @@
   const CUSTOMER_TABLE = 'Customer';
   const API = 'https://api.airtable.com/v0';
 
+  const VEHICLE_TABLE = 'Vehicle';
+
   let currentTab = 'today';
   let allRecords = [];
+  let dragSrcIndex = null;
 
   // ===== DATE UTILS =====
   function getDateStr(offset = 0) {
@@ -564,7 +583,23 @@
       (data.records || []).forEach(r => {
         const opt = document.createElement('option');
         opt.value = r.id;
-        opt.textContent = r.fields['企業名'] || r.id;
+        opt.textContent = r.fields['配送先名'] || r.id;
+        select.appendChild(opt);
+      });
+    } catch(e) {}
+  }
+
+  async function fetchDrivers() {
+    try {
+      const url = `${API}/${BASE_ID}/${VEHICLE_TABLE}`;
+      const res = await fetch(url, { headers: { Authorization: `Bearer ${TOKEN}` } });
+      const data = await res.json();
+      const select = document.getElementById('formDriver');
+      select.innerHTML = '<option value="">選択してください</option>';
+      (data.records || []).forEach(r => {
+        const opt = document.createElement('option');
+        opt.value = r.fields['ドライバー名'] || '';
+        opt.textContent = r.fields['ドライバー名'] || r.id;
         select.appendChild(opt);
       });
     } catch(e) {}
@@ -597,7 +632,9 @@
     const product = document.getElementById('formProduct').value;
     const size = document.getElementById('formSize').value;
     const qty = document.getElementById('formQty').value;
+    const unit = document.getElementById('formUnit').value;
     const pallet = document.getElementById('formPallet').value;
+    const palletSize = document.getElementById('formPalletSize').value;
     const note = document.getElementById('formNote').value;
 
     if (!date || !customer) {
@@ -617,7 +654,9 @@
         '商品名': product || undefined,
         'サイズ': size || undefined,
         '数量': qty ? parseInt(qty) : undefined,
+        '単位': unit || undefined,
         'パレット数': pallet ? parseInt(pallet) : undefined,
+        'パレットサイズ': palletSize || undefined,
         '備考': note || undefined,
         'Customer': [customer]
       };
@@ -652,16 +691,17 @@
   function renderTable(records) {
     const tbody = document.getElementById('tableBody');
     if (!records.length) {
-      tbody.innerHTML = '<tr class="empty-row"><td colspan="6">配送データがありません</td></tr>';
+      tbody.innerHTML = '<tr class="empty-row"><td colspan="7">配送データがありません</td></tr>';
       return;
     }
-    tbody.innerHTML = records.map(r => {
+    tbody.innerHTML = records.map((r, i) => {
       const f = r.fields;
       const status = f['ステータス'] || '—';
       const badgeClass = getBadgeClass(status);
       const canConfirm = status === '配車組み中';
       return `
-        <tr>
+        <tr draggable="true" data-index="${i}" data-id="${r.id}" style="cursor:grab;">
+          <td style="color:var(--text-hint);font-size:16px;padding:0 8px;cursor:grab;">⠿</td>
           <td>${f['配送先名 (from Customer)'] || f['Customer'] || '—'}</td>
           <td>${f['ドライバー名'] || '—'}</td>
           <td>${f['作業区分'] || '—'}</td>
@@ -676,6 +716,52 @@
         </tr>
       `;
     }).join('');
+
+    // ドラッグ&ドロップ設定
+    const rows = tbody.querySelectorAll('tr[draggable]');
+    rows.forEach(row => {
+      row.addEventListener('dragstart', e => {
+        dragSrcIndex = parseInt(row.dataset.index);
+        e.dataTransfer.effectAllowed = 'move';
+        row.style.opacity = '0.5';
+      });
+      row.addEventListener('dragend', () => { row.style.opacity = '1'; });
+      row.addEventListener('dragover', e => {
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'move';
+        row.style.borderTop = '2px solid var(--blue)';
+      });
+      row.addEventListener('dragleave', () => { row.style.borderTop = ''; });
+      row.addEventListener('drop', async e => {
+        e.preventDefault();
+        row.style.borderTop = '';
+        const destIndex = parseInt(row.dataset.index);
+        if (dragSrcIndex === null || dragSrcIndex === destIndex) return;
+
+        const targetDate = currentTab === 'today' ? getDateStr(0) : getDateStr(1);
+        const filtered = allRecords.filter(r => (r.fields['配送予定日'] || '').split('T')[0] === targetDate);
+        const reordered = [...filtered];
+        const [moved] = reordered.splice(dragSrcIndex, 1);
+        reordered.splice(destIndex, 0, moved);
+
+        // 順序をAirtableに保存
+        showToast('配送順序を更新中...', '');
+        try {
+          await Promise.all(reordered.map((rec, idx) =>
+            fetch(`${API}/${BASE_ID}/${TABLE}/${rec.id}`, {
+              method: 'PATCH',
+              headers: { Authorization: `Bearer ${TOKEN}`, 'Content-Type': 'application/json' },
+              body: JSON.stringify({ fields: { '配送順序': idx + 1 } })
+            })
+          ));
+          showToast('配送順序を更新しました', 'success');
+          await fetchRecords();
+        } catch(e) {
+          showToast('順序の更新に失敗しました', 'error');
+        }
+        dragSrcIndex = null;
+      });
+    });
   }
 
   function renderMetrics() {
@@ -757,6 +843,7 @@
   document.getElementById('datePill').textContent = todayJP();
   fetchRecords();
   fetchCustomers();
+  fetchDrivers();
 
   // 3分ごとに自動更新
   setInterval(fetchRecords, 3 * 60 * 1000);
