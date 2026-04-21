@@ -450,8 +450,49 @@
         <input type="text" class="form-input" id="formDriver" placeholder="例：田中太郎">
       </div>
       <div class="form-group">
-        <label class="form-label">配送順</label>
+        <label class="form-label">配送順序</label>
         <input type="number" class="form-input" id="formOrder" placeholder="例：1">
+      </div>
+      <div class="form-group">
+        <label class="form-label">ステータス</label>
+        <select class="form-select" id="formStatus">
+          <option value="予約">予約</option>
+          <option value="配車組み中">配車組み中</option>
+          <option value="順序確定済み">順序確定済み</option>
+          <option value="配送中">配送中</option>
+          <option value="完了">完了</option>
+          <option value="持ち越し">持ち越し</option>
+          <option value="履歴">履歴</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">作業時間</label>
+        <select class="form-select" id="formJikan">
+          <option value="">選択してください</option>
+          <option value="午前">午前</option>
+          <option value="午後">午後</option>
+          <option value="終日">終日</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">商品名</label>
+        <input type="text" class="form-input" id="formProduct" placeholder="例：A4用紙">
+      </div>
+      <div class="form-group">
+        <label class="form-label">サイズ</label>
+        <input type="text" class="form-input" id="formSize" placeholder="例：A4">
+      </div>
+      <div class="form-group">
+        <label class="form-label">数量</label>
+        <input type="number" class="form-input" id="formQty" placeholder="例：100">
+      </div>
+      <div class="form-group">
+        <label class="form-label">パレット数</label>
+        <input type="number" class="form-input" id="formPallet" placeholder="例：2">
+      </div>
+      <div class="form-group">
+        <label class="form-label">備考</label>
+        <textarea class="form-input" id="formNote" rows="3" placeholder="備考があれば入力してください" style="resize:vertical;"></textarea>
       </div>
     </div>
     <div class="modal-footer">
@@ -500,8 +541,8 @@
     try {
       const today = getDateStr(0);
       const tomorrow = getDateStr(1);
-      const filter = `OR(IS_SAME({配送予定日},'${today}','day'),IS_SAME({配送予定日},'${tomorrow}','day'))`;
-      const url = `${API}/${BASE_ID}/${TABLE}?filterByFormula=${encodeURIComponent(filter)}&sort[0][field]=配送順&sort[0][direction]=asc`;
+      const filter = `OR(DATETIME_FORMAT({配送予定日},'YYYY-MM-DD')='${today}',DATETIME_FORMAT({配送予定日},'YYYY-MM-DD')='${tomorrow}')`;
+      const url = `${API}/${BASE_ID}/${TABLE}?filterByFormula=${encodeURIComponent(filter)}&sort[0][field]=配送順序&sort[0][direction]=asc`;
       const res = await fetch(url, { headers: { Authorization: `Bearer ${TOKEN}` } });
       if (!res.ok) throw new Error('APIエラー: ' + res.status);
       const data = await res.json();
@@ -551,6 +592,13 @@
     const sagyo = document.getElementById('formSagyo').value;
     const driver = document.getElementById('formDriver').value;
     const order = document.getElementById('formOrder').value;
+    const status = document.getElementById('formStatus').value;
+    const jikan = document.getElementById('formJikan').value;
+    const product = document.getElementById('formProduct').value;
+    const size = document.getElementById('formSize').value;
+    const qty = document.getElementById('formQty').value;
+    const pallet = document.getElementById('formPallet').value;
+    const note = document.getElementById('formNote').value;
 
     if (!date || !customer) {
       showToast('配送予定日と配送先は必須です', 'error');
@@ -561,10 +609,16 @@
       const url = `${API}/${BASE_ID}/${TABLE}`;
       const fields = {
         '配送予定日': date,
-        'ステータス': '予約',
+        'ステータス': status || '予約',
         '作業区分': sagyo || undefined,
+        '作業時間': jikan || undefined,
         'ドライバー名': driver || undefined,
-        '配送順': order ? parseInt(order) : undefined,
+        '配送順序': order ? parseInt(order) : undefined,
+        '商品名': product || undefined,
+        'サイズ': size || undefined,
+        '数量': qty ? parseInt(qty) : undefined,
+        'パレット数': pallet ? parseInt(pallet) : undefined,
+        '備考': note || undefined,
         'Customer': [customer]
       };
       Object.keys(fields).forEach(k => fields[k] === undefined && delete fields[k]);
@@ -611,7 +665,7 @@
           <td>${f['配送先名 (from Customer)'] || f['Customer'] || '—'}</td>
           <td>${f['ドライバー名'] || '—'}</td>
           <td>${f['作業区分'] || '—'}</td>
-          <td>${f['配送順'] || '—'}</td>
+          <td>${f['配送順序'] || '—'}</td>
           <td><span class="badge ${badgeClass}">${status}</span></td>
           <td>
             ${canConfirm
@@ -639,7 +693,7 @@
       stopList.innerHTML = '<p style="color:var(--text-hint);font-size:12px;padding:12px 0;">配送先がありません</p>';
       return;
     }
-    const sorted = [...records].sort((a,b) => (a.fields['配送順']||99) - (b.fields['配送順']||99));
+    const sorted = [...records].sort((a,b) => (a.fields['配送順序']||99) - (b.fields['配送順序']||99));
     stopList.innerHTML = sorted.map((r, i) => {
       const f = r.fields;
       const name = f['配送先名 (from Customer)'] || f['Customer'] || '—';
