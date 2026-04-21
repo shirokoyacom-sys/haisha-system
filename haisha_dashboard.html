@@ -523,7 +523,7 @@
       (data.records || []).forEach(r => {
         const opt = document.createElement('option');
         opt.value = r.id;
-        opt.textContent = r.fields['企業名'] || r.id;
+        opt.textContent = r.fields['配送先名'] || r.id;
         select.appendChild(opt);
       });
     } catch(e) {}
