@@ -368,6 +368,7 @@
       <div class="card-header">
         <span class="card-title">配送一覧</span>
         <div style="display:flex;align-items:center;gap:10px;">
+          <span id="travelSummary" style="display:none;font-size:12px;color:var(--blue);font-weight:500;background:var(--blue-light);padding:4px 10px;border-radius:20px;"></span>
           <div class="tabs">
             <button class="tab active" id="tabToday" onclick="switchTab('today')">本日</button>
             <button class="tab" id="tabTomorrow" onclick="switchTab('tomorrow')">明日</button>
@@ -383,6 +384,7 @@
               <th>ドライバー</th>
               <th>作業区分</th>
               <th>配送順序</th>
+              <th>移動時間</th>
               <th>ステータス</th>
               <th>操作</th>
             </tr>
@@ -536,6 +538,8 @@
   const API = 'https://api.airtable.com/v0';
 
   const VEHICLE_TABLE = 'Vehicle';
+  const MAPS_API_KEY = 'AIzaSyBBdKRWyEARo9ad5eLmthhkg1Tg0CvGYbs';
+  const ORIGIN = '〒340-0815 埼玉県八潮市八潮３丁目７−１５';
 
   let currentTab = 'today';
   let allRecords = [];
@@ -593,6 +597,59 @@
         select.appendChild(opt);
       });
     } catch(e) {}
+  }
+
+  // ===== TRAVEL TIME =====
+  async function calcTravelTimes(records) {
+    const sorted = [...records].sort((a,b) => (a.fields['配送順序']||99) - (b.fields['配送順序']||99));
+    const addresses = sorted.map(r => r.fields['配送先住所 (from Customer)'] || r.fields['住所'] || '').filter(a => a);
+    if (addresses.length === 0) return;
+
+    // 出発地点 + 全配送先
+    const waypoints = [ORIGIN, ...addresses];
+    const durations = [];
+
+    for (let i = 0; i < waypoints.length - 1; i++) {
+      try {
+        const url = `https://maps.googleapis.com/maps/api/distancematrix/json?origins=${encodeURIComponent(waypoints[i])}&destinations=${encodeURIComponent(waypoints[i+1])}&mode=driving&language=ja&key=${MAPS_API_KEY}`;
+        const res = await fetch(url);
+        const data = await res.json();
+        const element = data.rows?.[0]?.elements?.[0];
+        if (element?.status === 'OK') {
+          durations.push(element.duration.value); // 秒
+        } else {
+          durations.push(null);
+        }
+      } catch(e) {
+        durations.push(null);
+      }
+    }
+
+    // 合計時間
+    const total = durations.reduce((sum, d) => sum + (d || 0), 0);
+    const totalMin = Math.round(total / 60);
+    const hours = Math.floor(totalMin / 60);
+    const mins = totalMin % 60;
+    const totalStr = hours > 0 ? `${hours}時間${mins}分` : `${mins}分`;
+
+    // 合計表示
+    document.getElementById('travelSummary').textContent = `合計移動時間：${totalStr}`;
+    document.getElementById('travelSummary').style.display = 'block';
+
+    // 各行に移動時間を表示
+    const rows = document.querySelectorAll('#tableBody tr[data-index]');
+    rows.forEach((row, i) => {
+      const cell = row.querySelector('.travel-time');
+      if (cell) {
+        if (durations[i] !== null && durations[i] !== undefined) {
+          const m = Math.round(durations[i] / 60);
+          cell.textContent = `→ ${m}分`;
+          cell.style.color = 'var(--text-secondary)';
+        } else {
+          cell.textContent = '—';
+        }
+      }
+    });
   }
 
   async function fetchDrivers() {
@@ -692,6 +749,7 @@
     renderTable(filtered);
     renderMetrics();
     renderStops(filtered);
+    calcTravelTimes(filtered);
   }
 
   function renderTable(records) {
@@ -712,6 +770,7 @@
           <td>${f['ドライバー名'] || '—'}</td>
           <td>${f['作業区分'] || '—'}</td>
           <td>${f['配送順序'] || '—'}</td>
+          <td class="travel-time" style="font-size:12px;color:var(--text-hint);">計算中...</td>
           <td><span class="badge ${badgeClass}">${status}</span></td>
           <td>
             ${canConfirm
